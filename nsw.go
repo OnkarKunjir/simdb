@@ -85,7 +85,6 @@ func (nsw *NavigableSmallWorld) Search(vector *Vector, k, efsearch int) []*Node 
 	return searchedNodes
 }
 
-// Prunes neighbours of
 func pruneNeighbours(node *Node, m int) {
 	neighbours := slices.SortedFunc(maps.Values(node.neighbours[0]), func(a, b *Node) int {
 		return cmp.Compare(node.vector.Distance(a.vector), node.vector.Distance(b.vector))
@@ -116,6 +115,7 @@ func pruneNeighbours(node *Node, m int) {
 	}
 }
 
+// Prunes neighbours of
 func (nsw *NavigableSmallWorld) Insert(vector *Vector, m, efconstruct int) {
 	neighbours := []map[string]*Node{make(map[string]*Node)}
 	toInsert := &Node{id: vector.id, vector: vector, neighbours: neighbours}
