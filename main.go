@@ -1,10 +1,8 @@
 package main
 
 import (
-	"container/heap"
 	"fmt"
 	"math/rand"
-	"sort"
 	"strconv"
 )
 
@@ -25,28 +23,18 @@ func generateDataset(randGenerator *rand.Rand, n int) []*Vector {
 	return vectors
 }
 
-func knn(of *Vector, vectors []*Vector, k int) []*ScoredVector {
-	queue := make(VectorQueue, 0, k)
-	heap.Init(&queue)
-	for _, vector := range vectors {
-		scoredVector := &ScoredVector{vector, similarity(of, vector)}
-		if len(queue) < k {
-			heap.Push(&queue, scoredVector)
-			continue
-		}
-
-		if queue[k-1].score < scoredVector.score {
-			heap.Pop(&queue)
-			heap.Push(&queue, scoredVector)
-		}
-	}
-
-	sort.Sort(sort.Reverse(&queue))
-	return queue
-}
-
 func main() {
 	randGenerator := rand.New(rand.NewSource(42069))
-	vectors := generateDataset(randGenerator, 10)
-	fmt.Println(knn(vectors[0], vectors, 3))
+	generateDataset(randGenerator, 10)
+
+	nsw := &NavigableSmallWorld{}
+
+	vectorA := &Vector{id: "0", values: [VectorDimension]float64{0, 0}}
+	vectorB := &Vector{id: "1", values: [VectorDimension]float64{1, 0}}
+	nsw.Insert(vectorA, 10, 1)
+	nsw.Insert(vectorB, 10, 1)
+	nsw.Insert(&Vector{"2", [VectorDimension]float64{2, 0}}, 10, 1)
+
+	fmt.Println(nsw)
+	fmt.Println(nsw.Search(&Vector{id: "2", values: [VectorDimension]float64{2, 0}}, 2, 1))
 }
