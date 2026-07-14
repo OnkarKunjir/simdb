@@ -1,7 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"container/heap"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -15,7 +18,6 @@ func (nsw *NavigableSmallWorld) String() string {
 		builder.WriteString(node.id)
 		builder.WriteString(" -> [ ")
 
-
 		for _, neighbour := range node.neighbours {
 			builder.WriteString(neighbour.id)
 			builder.WriteString(" ")
@@ -25,16 +27,14 @@ func (nsw *NavigableSmallWorld) String() string {
 	return builder.String()
 }
 
-
 // Search k nearest nodes from graph where at max efsearch nodes are explored
 func (nsw *NavigableSmallWorld) Search(vector *Vector, k, efsearch int) []*Node {
 	if len(nsw.nodes) == 0 {
-		// TODO: return correct results from here
 		return []*Node{}
 	}
 
-	result := make(PriorityQueue, 0, k)
-	candidates := make(PriorityQueue, 0, efsearch)
+	result := make(PriorityQueue, 0, k)            // max distnace on top
+	candidates := make(PriorityQueue, 0, efsearch) // min distnace on top
 	heap.Push(&candidates, &QueuedNode{node: nsw.nodes[0], score: vector.Distance(nsw.nodes[0].vector)})
 
 	visitedNodes := make(map[string]struct{})
@@ -43,6 +43,8 @@ func (nsw *NavigableSmallWorld) Search(vector *Vector, k, efsearch int) []*Node 
 	for candidates.Len() > 0 {
 		queuedNode := heap.Pop(&candidates).(*QueuedNode)
 		if result.Len() == k && -result[0].score < queuedNode.score {
+			// results are full and current shortest distance is grateer than recorded longest distance
+			// no need to search any further
 			break
 		}
 
@@ -84,13 +86,49 @@ func (nsw *NavigableSmallWorld) Search(vector *Vector, k, efsearch int) []*Node 
 	return searchedNodes
 }
 
-func (nsw *NavigableSmallWorld) Insert(vector *Vector, m, efconstruct int) {
-	toInsert := &Node{id: vector.id, vector: vector}
-	for _, node := range nsw.Search(vector, m, efconstruct) {
-		node.neighbours = append(node.neighbours, toInsert)
-		toInsert.neighbours = append(toInsert.neighbours, node)
+// Prunes neighbours of
+func pruneNeighbours(node *Node, m int) {
+	neighbours := slices.SortedFunc(maps.Values(node.neighbours), func(a, b *Node) int {
+		return cmp.Compare(node.vector.Distance(a.vector), node.vector.Distance(b.vector))
+	})
+
+	selected := make([]*Node, 0, m)
+	selected = append(selected, neighbours[0])
+	toPrune := make([]string, 0, m)
+
+	for _, candidate := range neighbours[1:] {
+		currentDistance := node.vector.Distance(candidate.vector)
+
+		// if lenght of selected nodes is > m then skip everything it's too far but also skip it node is closer to any of the selected nodes
+		skipNode := len(selected) >= m || slices.ContainsFunc(selected, func(selected *Node) bool {
+			return candidate.vector.Distance(selected.vector) < currentDistance
+		})
+
+		if skipNode {
+			toPrune = append(toPrune, candidate.id)
+		} else {
+			selected = append(selected, candidate)
+		}
 	}
 
-	// TODO: add pruning logic
+	for _, nodeId := range toPrune {
+		delete(node.neighbours[nodeId].neighbours, node.id)
+		delete(node.neighbours, nodeId)
+	}
+}
+
+func (nsw *NavigableSmallWorld) Insert(vector *Vector, m, efconstruct int) {
+	toInsert := &Node{id: vector.id, vector: vector, neighbours: make(map[string]*Node)}
+	for _, node := range nsw.Search(vector, m, efconstruct) {
+		node.neighbours[toInsert.id] = toInsert
+		toInsert.neighbours[node.id] = node
+		if len(node.neighbours) < m {
+			// no pruning needed
+			continue
+		}
+
+		pruneNeighbours(node, m)
+	}
+
 	nsw.nodes = append(nsw.nodes, toInsert)
 }

@@ -2,20 +2,18 @@ package main
 
 import "fmt"
 
-
 type Node struct {
-	id string
-	vector *Vector
-	neighbours []*Node
+	id         string
+	vector     *Vector
+	neighbours map[string]*Node
 }
-
 
 func (node *Node) String() string {
 	return fmt.Sprintf("Node{id: %s}", node.id)
 }
 
 type QueuedNode struct {
-	node *Node 
+	node  *Node
 	score float64
 }
 
@@ -24,7 +22,6 @@ func (scoredNode *QueuedNode) String() string {
 }
 
 type PriorityQueue []*QueuedNode
-
 
 func (queue PriorityQueue) Len() int { return len(queue) }
 
