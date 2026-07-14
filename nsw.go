@@ -18,7 +18,7 @@ func (nsw *NavigableSmallWorld) String() string {
 		builder.WriteString(node.id)
 		builder.WriteString(" -> [ ")
 
-		for _, neighbour := range node.neighbours {
+		for _, neighbour := range node.neighbours[0] {
 			builder.WriteString(neighbour.id)
 			builder.WriteString(" ")
 		}
@@ -36,7 +36,6 @@ func (nsw *NavigableSmallWorld) Search(vector *Vector, k, efsearch int) []*Node 
 	result := make(PriorityQueue, 0, k)            // max distnace on top
 	candidates := make(PriorityQueue, 0, efsearch) // min distnace on top
 	heap.Push(&candidates, &QueuedNode{node: nsw.nodes[0], score: vector.Distance(nsw.nodes[0].vector)})
-
 	visitedNodes := make(map[string]struct{})
 	visitedNodes[candidates[0].node.id] = struct{}{}
 
@@ -59,7 +58,7 @@ func (nsw *NavigableSmallWorld) Search(vector *Vector, k, efsearch int) []*Node 
 			heap.Push(&result, queuedNode)
 		}
 
-		for _, neighbour := range queuedNode.node.neighbours {
+		for _, neighbour := range queuedNode.node.neighbours[0] {
 			if _, ok := visitedNodes[neighbour.id]; ok {
 				// already visited node, skip it.
 				continue
@@ -88,7 +87,7 @@ func (nsw *NavigableSmallWorld) Search(vector *Vector, k, efsearch int) []*Node 
 
 // Prunes neighbours of
 func pruneNeighbours(node *Node, m int) {
-	neighbours := slices.SortedFunc(maps.Values(node.neighbours), func(a, b *Node) int {
+	neighbours := slices.SortedFunc(maps.Values(node.neighbours[0]), func(a, b *Node) int {
 		return cmp.Compare(node.vector.Distance(a.vector), node.vector.Distance(b.vector))
 	})
 
@@ -112,16 +111,17 @@ func pruneNeighbours(node *Node, m int) {
 	}
 
 	for _, nodeId := range toPrune {
-		delete(node.neighbours[nodeId].neighbours, node.id)
-		delete(node.neighbours, nodeId)
+		delete(node.neighbours[0][nodeId].neighbours[0], node.id)
+		delete(node.neighbours[0], nodeId)
 	}
 }
 
 func (nsw *NavigableSmallWorld) Insert(vector *Vector, m, efconstruct int) {
-	toInsert := &Node{id: vector.id, vector: vector, neighbours: make(map[string]*Node)}
+	neighbours := []map[string]*Node{make(map[string]*Node)}
+	toInsert := &Node{id: vector.id, vector: vector, neighbours: neighbours}
 	for _, node := range nsw.Search(vector, m, efconstruct) {
-		node.neighbours[toInsert.id] = toInsert
-		toInsert.neighbours[node.id] = node
+		node.neighbours[0][toInsert.id] = toInsert
+		toInsert.neighbours[0][node.id] = node
 		if len(node.neighbours) < m {
 			// no pruning needed
 			continue

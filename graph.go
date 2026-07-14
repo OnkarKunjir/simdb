@@ -5,7 +5,7 @@ import "fmt"
 type Node struct {
 	id         string
 	vector     *Vector
-	neighbours map[string]*Node
+	neighbours []map[string]*Node
 }
 
 func (node *Node) String() string {
