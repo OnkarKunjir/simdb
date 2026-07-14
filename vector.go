@@ -23,7 +23,8 @@ func (this *Vector) Similarity(other *Vector) float64 {
 func (this *Vector) Distance(other *Vector) float64 {
 	var distance float64
 	for i := range this.values {
-		distance += math.Pow(other.values[i]-this.values[i], 2)
+		diff := other.values[i] - this.values[i]
+		distance += diff * diff
 	}
 	return math.Sqrt(distance)
 }
