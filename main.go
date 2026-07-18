@@ -1,92 +1,57 @@
 package main
 
 import (
-	"container/heap"
 	"fmt"
-	"math/rand"
-	"strconv"
 )
 
-const M = 16
-const efconstruction = M * 4
-const efsearch = 40
-const vectorSize = 500
-
-var randGenerator = rand.New(rand.NewSource(42069))
-
-func generateDataset(size, n int) []*Vector {
-	vectors := make([]*Vector, 0, n)
-	for id := range n {
-		values := make([]float64, size)
-		for i := range values {
-			values[i] = randGenerator.Float64()
-
-		}
-
-		vectors = append(vectors, &Vector{
-			id:     strconv.Itoa(id),
-			values: values,
-		})
-	}
-	return vectors
-}
-
-func knn(vector *Vector, hnsw *HierarchicalNavigableSmallWorld, k int) []*Document {
-	queue := make(PriorityQueue, 0, k)
-	for _, node := range hnsw.nodes {
-		queuedNode := &QueuedNode{node, -vector.Distance(node.vector)}
-		if queue.Len() < k {
-			heap.Push(&queue, queuedNode)
-		} else if queue[0].score < queuedNode.score {
-			heap.Pop(&queue)
-			heap.Push(&queue, queuedNode)
-		}
-	}
-
-	documents := make([]*Document, len(queue))
-	for index := len(queue) - 1; index >= 0; index-- {
-		queuedNode := heap.Pop(&queue).(*QueuedNode)
-		documents[index] = &Document{queuedNode.node.vector, -queuedNode.score}
-	}
-
-	return documents
-}
-
-func benchmark(hnsw *HierarchicalNavigableSmallWorld, n, k int) {
-	var averageRecall float64
-
-	for _, vector := range generateDataset(vectorSize, n) {
-		expectedIds := make(map[string]struct{})
-		for _, document := range knn(vector, hnsw, k) {
-			expectedIds[document.vector.id] = struct{}{}
-		}
-
-		count := 0
-		for _, document := range hnsw.Search(vector, k, efsearch) {
-			if _, ok := expectedIds[document.vector.id]; ok {
-				count++
-			}
-		}
-		averageRecall += float64(count) / 10
-	}
-
-	averageRecall = averageRecall / float64(n)
-	fmt.Printf("Average recall: %0.2f\n", averageRecall)
+var words = []string{
+	// animals
+	"cat", "dog", "elephant", "tiger", "whale", "dolphin", "penguin", "eagle", "cobra", "gorilla",
+	// fruits
+	"apple", "banana", "mango", "grape", "orange", "strawberry", "watermelon", "pineapple", "peach", "cherry",
+	// vegetables
+	"carrot", "broccoli", "spinach", "tomato", "potato", "onion", "garlic", "cucumber", "pepper", "mushroom",
+	// countries
+	"india", "japan", "brazil", "germany", "canada", "australia", "france", "nigeria", "argentina", "thailand",
+	// cities
+	"mumbai", "tokyo", "london", "paris", "newyork", "berlin", "sydney", "cairo", "toronto", "bangkok",
+	// sports
+	"cricket", "football", "tennis", "basketball", "swimming", "boxing", "cycling", "golf", "rugby", "volleyball",
+	// tech
+	"computer", "keyboard", "monitor", "network", "server", "database", "algorithm", "compiler", "processor", "memory",
+	// programming languages
+	"golang", "python", "javascript", "rust", "java", "typescript", "kotlin", "swift", "haskell", "ruby",
+	// emotions
+	"happy", "sad", "angry", "fearful", "surprised", "disgusted", "anxious", "excited", "bored", "content",
+	// weather
+	"sunny", "rainy", "cloudy", "stormy", "windy", "snowy", "foggy", "humid", "freezing", "drought",
 }
 
 func main() {
-	hnsw := &HierarchicalNavigableSmallWorld{}
+	const M = 16
+	const efConstruct = M * 4
+	const efsearch = 40
+	const url = "http://localhost:11434/api/embed"
+	const model = "qwen3-embedding:0.6b"
 
-	fmt.Println("Inserting data")
-	for _, vector := range generateDataset(vectorSize, 500) {
-		hnsw.Insert(vector, M, efconstruction)
+	searchEngine := CreateSearchEngine(M, efConstruct, efsearch, url, model)
+
+	fmt.Println("Starting indexing")
+	for _, word := range words {
+		searchEngine.Index(word, nil)
 	}
-	fmt.Println("Data insert finished")
+	fmt.Println("Finished indexing")
 
-	benchmark(hnsw, 1000, 10)
 
-	// // fmt.Println(hnsw)
-	// toSearch := &Vector{id: "2", values: []float64{2, 0}}
-	// fmt.Println(hnsw.Search(toSearch, 10, efsearch))
-	// fmt.Println(knn(toSearch, hnsw, 10))
+	var searchString string
+	for {
+		fmt.Println("Search: ")
+		fmt.Scan(&searchString)
+
+		for index, document := range searchEngine.Search(searchString, 5) {
+			fmt.Println(index, document.Content)
+		}
+		fmt.Println("----------------------------")
+	}
+
 }

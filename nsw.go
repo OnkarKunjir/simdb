@@ -118,7 +118,7 @@ func pruneNeighbours(node *Node, m int) {
 // Prunes neighbours of
 func (nsw *NavigableSmallWorld) Insert(vector *Vector, m, efconstruct int) {
 	neighbours := []map[string]*Node{make(map[string]*Node)}
-	toInsert := &Node{id: vector.id, vector: vector, neighbours: neighbours}
+	toInsert := &Node{id: vector.Id, vector: vector, neighbours: neighbours}
 	for _, node := range nsw.Search(vector, m, efconstruct) {
 		node.neighbours[0][toInsert.id] = toInsert
 		toInsert.neighbours[0][node.id] = node

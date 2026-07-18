@@ -3,16 +3,16 @@ package main
 import "math"
 
 type Vector struct {
-	id     string
-	values []float64
+	Id     string
+	Values []float64
 }
 
 func (this *Vector) Similarity(other *Vector) float64 {
 	var dotProduct, lenA, lenB float64
-	for i := range this.values {
-		dotProduct += this.values[i] * other.values[i]
-		lenA += this.values[i] * this.values[i]
-		lenB += other.values[i] * other.values[i]
+	for i := range this.Values {
+		dotProduct += this.Values[i] * other.Values[i]
+		lenA += this.Values[i] * this.Values[i]
+		lenB += other.Values[i] * other.Values[i]
 	}
 
 	lenA = math.Sqrt(lenA)
@@ -22,8 +22,8 @@ func (this *Vector) Similarity(other *Vector) float64 {
 
 func (this *Vector) Distance(other *Vector) float64 {
 	var distance float64
-	for i := range this.values {
-		diff := other.values[i] - this.values[i]
+	for i := range this.Values {
+		diff := other.Values[i] - this.Values[i]
 		distance += diff * diff
 	}
 	return math.Sqrt(distance)
