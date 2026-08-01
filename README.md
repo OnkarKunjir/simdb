@@ -1,49 +1,137 @@
 # SimDB
 
-A vector similarity search engine implemented from scratch in Go, built around the **HNSW (Hierarchical Navigable Small World)** algorithm — the same algorithm powering production vector databases like Weaviate, Pinecone, and pgvector.
+A vector similarity search database written in Go, built on a from-scratch implementation of the HNSW (Hierarchical Navigable Small World) algorithm. Uses [Ollama](https://ollama.com) to generate embeddings locally.
 
----
+## How it works
 
-## Why I built this
+SimDB implements HNSW — a graph-based approximate nearest neighbour algorithm that organises vectors into multiple layers. Upper layers act as highways for fast coarse navigation, and the base layer (layer 0) performs the fine-grained search. This gives O(log n) search complexity with high recall.
 
-I've spent the last few years building production RAG pipelines and vector search systems — using pgvector, evaluating Elasticsearch, and shipping semantic search over 100K+ metadata attributes at enterprise scale. I understood what these systems *did*, but I wanted to understand what they were *built on*.
+The core algorithm is implemented from scratch in Go with no external dependencies. Embeddings are generated via a local Ollama instance, so no external API keys are needed.
 
-This project is that exercise. No libraries. No shortcuts. Just the algorithm, the data structures, and Go.
+## Project structure
 
----
+```
+core/       HNSW implementation — graph, vectors, search engine
+server/     REST API server
+python/     Python client wrapper for the REST API
+```
 
-## What is HNSW?
+## Prerequisites
 
-Most vector databases need to answer one question fast: *"given this vector, what are the K most similar vectors in my dataset?"*
+- Go 1.22+
+- [Ollama](https://ollama.com) running locally
+- An embedding model pulled in Ollama
 
-The naive approach — compute cosine similarity against every vector — is O(n). Fine for 1,000 vectors. Unusable for 1,000,000.
+```bash
+ollama pull qwen3-embedding:0.6b
+```
 
-HNSW solves this with a **hierarchical graph structure**:
+## Running the server
 
-- Vectors are nodes in a graph. Each node connects to its nearest neighbours.
-- The graph has multiple layers. Upper layers are sparse (fast, coarse navigation). Lower layers are dense (slow, precise search).
-- On **insert**, a node is assigned a random layer level using exponential decay — most nodes land at layer 0, fewer at layer 1, fewer still at layer 2, and so on.
-- On **search**, we enter at the top layer, greedily navigate toward the query vector, then descend layer by layer, getting more precise as we go.
+```bash
+go run ./server
+```
 
-This gives approximate nearest neighbour search in **O(log n)** — orders of magnitude faster than brute force, with recall that's good enough for production use cases.
+Server starts on port 8080 by default.
 
----
+## REST API
 
-## Implementation
+### List stores
 
-### NSW (`nsw.go`)
+```
+GET /list-stores
+```
 
-The foundation. A single-layer Navigable Small World graph with:
+Returns a list of all existing vector stores.
 
-- **Beam search** using a dual priority queue — a min-heap for candidates to explore, a max-heap for current best results
-- **Early stopping** — search terminates when the closest unexplored candidate is farther than the worst current result
-- **Diversity-based neighbour pruning (RNG heuristic)** — when a node exceeds its max connections, we don't just drop the farthest neighbour. We keep neighbours that "cover different directions" in vector space, preserving graph navigability
+### Create a store
 
-### HNSW (`hnsw.go`)
+```
+POST /create-store
+```
 
-The full hierarchical index:
-- Probabilistic layer assignment on insert using exponential decay (`-ln(rand) * mL`)
-- Layer-by-layer greedy search during insert to find entry points for each layer
-- NSW-based search within each layer
-- Final precise search at layer 0
+```json
+{
+  "name": "my-store",
+  "m": 16,
+  "efConstruct": 64,
+  "efSearch": 40,
+  "url": "http://localhost:11434/api/embed",
+  "model": "qwen3-embedding:0.6b"
+}
+```
 
+### Index documents
+
+```
+POST /index-documents
+```
+
+```json
+{
+  "store": "my-store",
+  "documents": ["cat", "dog", "elephant"]
+}
+```
+
+### Search
+
+```
+POST /search
+```
+
+```json
+{
+  "store": "my-store",
+  "query": "kitten",
+  "k": 5
+}
+```
+
+## Python client
+
+```python
+from simdb import SimDB
+
+db = SimDB("http://localhost:8080")
+db.create_store("my-store", model="qwen3-embedding:0.6b")
+db.index(["cat", "dog", "elephant", "tiger"])
+results = db.search("kitten", k=3)
+```
+
+## HNSW parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `m` | 16 | Max connections per node per layer. Higher = better recall, more memory. |
+| `efConstruct` | 64 | Beam width during index build. Higher = better graph quality, slower build. |
+| `efSearch` | 40 | Beam width during search. Higher = better recall, slower queries. |
+
+For datasets above 1000 documents, `efSearch=80` is recommended for ~0.98 recall.
+
+## Running locally without the server
+
+```bash
+go run .
+```
+
+This starts an interactive search session using the word dataset in `main.go`.
+
+```
+Starting indexing
+Finished indexing
+Search:
+kitten
+0 cat
+1 dog
+2 tiger
+3 dolphin
+4 penguin
+```
+
+## Performance
+
+Benchmarked on 1000 documents with `m=16`, `efConstruct=64`, `efSearch=80`:
+
+- Average recall: ~0.98
+- Embedding model: qwen3-embedding:0.6b (500-dimensional vectors)
