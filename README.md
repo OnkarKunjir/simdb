@@ -1,137 +1,255 @@
 # SimDB
 
-A vector similarity search database written in Go, built on a from-scratch implementation of the HNSW (Hierarchical Navigable Small World) algorithm. Uses [Ollama](https://ollama.com) to generate embeddings locally.
+A lightweight, high-performance vector search engine written in Go.
+
+SimDB indexes dense vector embeddings using **Hierarchical Navigable Small World (HNSW)** graphs and exposes a simple REST API with an accompanying Python client. It is designed for semantic search, Retrieval-Augmented Generation (RAG), recommendation systems, and other embedding-based applications.
+
+> **Status:** Active development. The project is functional but not yet production-ready.
+
+---
+
+## Features
+
+* 🚀 Fast approximate nearest neighbor (ANN) search using **HNSW**
+* 📚 Multiple independent vector stores
+* 🔍 Semantic search over text documents
+* 🌐 REST API
+* 🐍 Python client library
+* 🤖 Automatic embedding generation through an OpenAI-compatible embedding endpoint (e.g. Ollama)
+* 📄 Document metadata support
+* 🧩 Clean modular architecture
+
+---
+
+## Architecture
+
+```
+                 +----------------+
+                 | Python Client  |
+                 +-------+--------+
+                         |
+                         | HTTP
+                         |
+                 +-------v--------+
+                 |   REST Server  |
+                 +-------+--------+
+                         |
+                 +-------v--------+
+                 | Search Engine  |
+                 +-------+--------+
+                         |
+         +---------------+----------------+
+         |                                |
++--------v---------+             +--------v--------+
+| Document Store   |             |   HNSW Index    |
++------------------+             +-----------------+
+                         |
+                         |
+                 Embedding Provider
+          (Ollama / OpenAI Compatible)
+```
+
+---
 
 ## How it works
 
-SimDB implements HNSW — a graph-based approximate nearest neighbour algorithm that organises vectors into multiple layers. Upper layers act as highways for fast coarse navigation, and the base layer (layer 0) performs the fine-grained search. This gives O(log n) search complexity with high recall.
+When a document is indexed:
 
-The core algorithm is implemented from scratch in Go with no external dependencies. Embeddings are generated via a local Ollama instance, so no external API keys are needed.
+1. The text is sent to the configured embedding endpoint.
+2. The returned embedding vector is stored.
+3. The vector is inserted into the HNSW graph.
+4. The original document and metadata are retained.
 
-## Project structure
+During search:
+
+1. The query is converted into an embedding.
+2. HNSW performs approximate nearest neighbor search.
+3. Matching documents are returned, ranked by similarity.
+
+---
+
+## Project Structure
 
 ```
-core/       HNSW implementation — graph, vectors, search engine
-server/     REST API server
-python/     Python client wrapper for the REST API
+simdb/
+├── core/
+│   ├── graph.go          # Graph data structures
+│   ├── vector.go         # Vector operations
+│   ├── nsw.go            # Plain NSW implementation
+│   ├── hnsw.go           # HNSW implementation
+│   └── searchengine.go   # Indexing and search logic
+│
+├── rest/
+│   └── server.go         # REST API
+│
+├── python/
+│   ├── simdb.py          # Python SDK
+│   └── example.py
+│
+├── main.go
+└── go.mod
 ```
 
-## Prerequisites
+---
 
-- Go 1.22+
-- [Ollama](https://ollama.com) running locally
-- An embedding model pulled in Ollama
+## Getting Started
+
+### Clone
 
 ```bash
-ollama pull qwen3-embedding:0.6b
+git clone https://github.com/OnkarKunjir/simdb.git
+cd simdb
 ```
 
-## Running the server
+### Run
 
 ```bash
 go run .
 ```
 
-Server starts on port 8080 by default.
+By default the REST server starts on port **8080**.
 
-## REST API
+---
 
-### List stores
-
-```
-GET /list-stores
-```
-
-Returns a list of all existing vector stores.
-
-### Create a store
-
-```
-POST /create-store
-```
-
-```json
-{
-  "name": "my-store",
-  "m": 16,
-  "efConstruct": 64,
-  "efSearch": 40,
-  "url": "http://localhost:11434/api/embed",
-  "model": "qwen3-embedding:0.6b"
-}
-```
-
-### Index documents
-
-```
-POST /index-documents
-```
-
-```json
-{
-  "store": "my-store",
-  "documents": ["cat", "dog", "elephant"]
-}
-```
-
-### Search
-
-```
-POST /search
-```
-
-```json
-{
-  "store": "my-store",
-  "query": "kitten",
-  "k": 5
-}
-```
-
-## Python client
+## Python Client
 
 ```python
 from simdb import SimDB
 
 db = SimDB("http://localhost:8080")
-db.create_store("my-store", model="qwen3-embedding:0.6b")
-db.index(["cat", "dog", "elephant", "tiger"])
-results = db.search("kitten", k=3)
+
+db.create_store("books")
+
+db.index(
+    store="books",
+    document="Crime and Punishment was written by Fyodor Dostoevsky.",
+    metadata={
+        "author": "Fyodor Dostoevsky"
+    }
+)
+
+results = db.search(
+    store="books",
+    query="Russian novels",
+    top_k=5
+)
+
+print(results)
 ```
 
-## HNSW parameters
+---
 
-| Parameter | Default | Description |
-|---|---|---|
-| `m` | 16 | Max connections per node per layer. Higher = better recall, more memory. |
-| `efConstruct` | 64 | Beam width during index build. Higher = better graph quality, slower build. |
-| `efSearch` | 40 | Beam width during search. Higher = better recall, slower queries. |
+## REST API
 
-For datasets above 1000 documents, `efSearch=80` is recommended for ~0.98 recall.
+### Create Store
 
-## Running locally without the server
-
-```bash
-go run .
+```http
+POST /stores
 ```
 
-This starts an interactive search session using the word dataset in `main.go`.
+### List Stores
 
-```
-Starting indexing
-Finished indexing
-Search:
-kitten
-0 cat
-1 dog
-2 tiger
-3 dolphin
-4 penguin
+```http
+GET /stores
 ```
 
-## Performance
+### Index Document
 
-Benchmarked on 1000 documents with `m=16`, `efConstruct=64`, `efSearch=80`:
+```http
+POST /documents
+```
 
-- Average recall: ~0.98
-- Embedding model: qwen3-embedding:0.6b (500-dimensional vectors)
+Example
+
+```json
+{
+    "store": "books",
+    "document": "Crime and Punishment was written by Fyodor Dostoevsky.",
+    "metadata": {
+        "author": "Fyodor Dostoevsky"
+    }
+}
+```
+
+### Search
+
+```http
+POST /search
+```
+
+Example
+
+```json
+{
+    "store": "books",
+    "query": "Russian novels",
+    "top_k": 5
+}
+```
+
+---
+
+## HNSW
+
+SimDB uses the **Hierarchical Navigable Small World (HNSW)** algorithm for approximate nearest neighbor search.
+
+The implementation includes:
+
+* Multi-layer graph construction
+* Random level generation
+* Greedy graph traversal
+* Beam search
+* Neighbor pruning heuristic
+* Configurable `M`
+* Configurable `efConstruction`
+* Configurable `efSearch`
+
+A plain **NSW** implementation is also included for comparison and experimentation.
+
+---
+
+## Current Limitations
+
+SimDB is still under active development.
+
+Current limitations include:
+
+* In-memory storage only
+* No persistence
+* No replication
+* No authentication
+* No document deletion
+* No update operations
+* Limited concurrent access guarantees
+
+---
+
+## Roadmap
+
+* [ ] Persistent storage
+* [ ] Batch indexing
+* [ ] Concurrent indexing/search
+* [ ] Pluggable embedding providers
+* [ ] Filtered search
+* [ ] Hybrid lexical + vector search
+* [ ] Index serialization
+* [ ] Benchmark suite
+* [ ] Performance profiling
+
+---
+
+## Why SimDB?
+
+The project started as an implementation of the HNSW algorithm and evolved into a complete vector search engine with a clean API and developer-friendly architecture.
+
+The goal is to provide a simple, understandable, and extensible codebase for experimenting with modern vector search while remaining practical enough to power real semantic search applications.
+
+---
+
+## Contributing
+
+Contributions, bug reports, and feature requests are welcome.
+
+If you'd like to improve the implementation or add new capabilities, feel free to open an issue or submit a pull request.
+
+---
