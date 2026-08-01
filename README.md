@@ -29,7 +29,7 @@ ollama pull qwen3-embedding:0.6b
 ## Running the server
 
 ```bash
-go run ./server
+go run .
 ```
 
 Server starts on port 8080 by default.
