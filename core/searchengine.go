@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"bytes"
@@ -72,7 +72,7 @@ func CreateSearchEngine(m, efconstruct, efsearch int, url, model string) *Search
 	}
 }
 
-func (searchEngine *SearchEngine) Index(content string, metadata map[string]string) {
+func (searchEngine *SearchEngine) Index(content string, metadata map[string]string) string {
 	id := strconv.Itoa(len(searchEngine.documents))
 	document := &Document{
 		Id:       id,
@@ -83,6 +83,8 @@ func (searchEngine *SearchEngine) Index(content string, metadata map[string]stri
 
 	searchEngine.documents[document.Id] = document
 	searchEngine.hnsw.Insert(document.Vector, searchEngine.m, searchEngine.efconstruct)
+
+	return id
 }
 
 func (searchEngine *SearchEngine) Search(content string, k int) []*Document {
